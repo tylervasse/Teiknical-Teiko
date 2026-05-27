@@ -104,7 +104,7 @@ The project includes a `Makefile` at the repo root for automated grading and rep
 | `output/part4_subjects_by_sex.csv` | Subject count by sex |
 | `output/part4_avg_b_cells.txt` | Average B cell count for melanoma male responders at time = 0 |
 
-> **Note:** `make setup` installs Java 21 (headless) and Nextflow if not already present. These are only required to run `make pipeline` and are not pre-installed by the devcontainer.
+> **Note:** `make setup` installs Java 21 (headless) if not already present, as Nextflow requires a JVM. In GitHub Codespaces the devcontainer handles this automatically via the Java devcontainer feature.
 
 ---
 
