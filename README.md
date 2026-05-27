@@ -6,16 +6,14 @@ Interactive Streamlit dashboard for analyzing immune cell population dynamics in
 ## Table of Contents
 
 - [Project Overview](#project-overview)
-- [Repository Contents](#repository-contents)
 - [How to Run the Project (GitHub Codespaces)](#how-to-run-the-project-github-codespaces)
   - [Install Python Dependencies](#install-python-dependencies)
-  - [Build the SQLite Database (Part 1)](#build-the-sqlite-database-part-1)
+  - [SQLite Database (Part 1)](#sqlite-database-part-1)
   - [Launch the Dashboard (Parts 2–4)](#launch-the-dashboard-parts-24)
 - [Database Schema Design and Scalability](#database-schema-design-and-scalability)
 - [Code Structure Overview](#code-structure-overview)
 - [Dashboard Features](#dashboard-features)
 - [Link to the Dashboard](#link-to-the-dashboard)
-- [Requirements](#requirements)
 
 ---
 
@@ -29,57 +27,16 @@ The goal of this project is to analyze immune cell population data from clinical
 
 ---
 
-## Repository Contents
-
-- `cell-count.csv`  
-  Original CSV file provided for the assignment
-
-- `cell_counts.db`  
-  Pre-built SQLite database generated from `cell-count.csv`
-
-- `db_creation.py`  
-  Script for database schema creation and data loading  
-  (optional: the database is already provided, but can be rebuilt if desired)
-
-- `streamlit_dashboard.py`  
-  Main Streamlit entry point; handles page navigation and global layout
-
-- `db.py`  
-  Cached database connection and all SQL query functions
-
-- `tables.py`  
-  Custom HTML table renderers (required long table, generic styled table)
-
-- `components.py`  
-  Pagination controls and shared UI components
-
-- `constants.py`  
-  Shared constants (column definitions, population order, layout widths)
-
-- `pages/part2.py`, `pages/part3.py`, `pages/part4.py`  
-  Page-level render functions for each dashboard section
-
-- `requirements.txt`  
-  Python dependencies required to run the project
-
----
-
 ## How to Run the Project (GitHub Codespaces)
 
-These steps assume you are running the project in GitHub Codespaces.
+The project includes a `.devcontainer` with Python 3.10 and automatic dependency setup. When opened in GitHub Codespaces, everything should be pre-installed and ready to run.
 
 ### Install Python Dependencies
 
-From the Codespaces terminal, run:
+If dependencies are not already installed, run from the terminal:
 
 ```bash
 pip install -r requirements.txt
-```
-
-If you prefer to install dependencies manually:
-
-```bash
-pip install streamlit pandas numpy plotly scipy statsmodels
 ```
 
 ---
@@ -122,46 +79,68 @@ The database uses a normalized relational schema that separates core entities fr
 
 ### Schema Overview
 
-**projects**  
-Stores one row per clinical project.
+**projects**
 
-- `project_id` (primary key)
+| Column | Type | Description |
+|--------|------|-------------|
+| `project_id` | TEXT | Unique project identifier (primary key) |
 
-**subjects**  
-Stores one row per subject or patient.
+---
 
-- `subject_id` (primary key)
-- `project_id` (foreign key to `projects`)
-- `treatment_id` (foreign key to `treatments`)
-- `condition`, `age`, `sex`, `response`
+**subjects**
 
-Treatment is stored at the subject level because all samples from a subject share the same treatment. Subjects with no treatment have `treatment_id = NULL`. Subjects with no recorded response also store `NULL` rather than a blank string.
+| Column | Type | Description |
+|--------|------|-------------|
+| `subject_id` | TEXT | Unique subject identifier (primary key) |
+| `project_id` | TEXT | Project this subject belongs to (foreign key) |
+| `treatment_id` | INTEGER | Treatment administered (foreign key; NULL if none) |
+| `condition` | TEXT | Disease condition (melanoma, carcinoma, healthy) |
+| `age` | INTEGER | Subject age |
+| `sex` | TEXT | Subject sex |
+| `response` | TEXT | Treatment response (yes/no; NULL if unknown) |
 
-**treatments**  
-Lookup table for treatment names. Only real treatments are stored — "none" is represented by `treatment_id = NULL` on the subject rather than a dedicated row.
+Treatment is stored at the subject level because all samples from a subject share the same treatment. "None" treatment is stored as `NULL` rather than a dedicated row. Blank response values are stored as `NULL` rather than empty strings.
 
-- `treatment_id` (primary key)
-- `name` (unique)
+---
 
-**samples**  
-Stores one row per biological sample.
+**treatments**
 
-- `sample_id` (primary key)
-- `subject_id` (foreign key to `subjects`)
-- `sample_type`, `time_from_treatment_start`
+| Column | Type | Description |
+|--------|------|-------------|
+| `treatment_id` | INTEGER | Unique treatment identifier (primary key) |
+| `name` | TEXT | Treatment name (e.g. miraclib, phauximab) |
 
-**cell_populations**  
-Lookup table for immune cell populations.
+---
 
-- `population_id` (primary key)
-- `name` (unique)
+**samples**
 
-**cell_counts**  
-Fact table storing observed counts.
+| Column | Type | Description |
+|--------|------|-------------|
+| `sample_id` | TEXT | Unique sample identifier (primary key) |
+| `subject_id` | TEXT | Subject this sample belongs to (foreign key) |
+| `sample_type` | TEXT | Sample type (PBMC, Tumor, Serum, Plasma) |
+| `time_from_treatment_start` | REAL | Time relative to treatment start (in days) |
 
-- `sample_id` (foreign key to `samples`)
-- `population_id` (foreign key to `cell_populations`)
-- `count` (non-negative)
+---
+
+**cell_populations**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `population_id` | INTEGER | Unique population identifier (primary key) |
+| `name` | TEXT | Population name (e.g. b_cell, cd8_t_cell) |
+
+---
+
+**cell_counts**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `sample_id` | TEXT | Sample this count belongs to (foreign key) |
+| `population_id` | INTEGER | Cell population (foreign key) |
+| `count` | INTEGER | Observed cell count (non-negative) |
+
+---
 
 ### Rationale and Scalability
 
@@ -236,32 +215,12 @@ The dashboard contains three sections navigable using the ◀ ▶ arrows in the 
 
 ## Link to the Dashboard
 
-The dashboard is an internal Streamlit application intended to run in a controlled environment such as GitHub Codespaces.
+The dashboard is publicly hosted on Streamlit Community Cloud and can be accessed at:
 
-After running:
+**[https://tyler-teiknical.streamlit.app/](https://tyler-teiknical.streamlit.app/)**
+
+It can also be run locally or in GitHub Codespaces:
 
 ```bash
 streamlit run streamlit_dashboard.py
 ```
-
-GitHub Codespaces will expose the application on a forwarded port. Opening that port in the browser provides access to the dashboard.
-
-The URL will look similar to:
-
-```text
-https://<codespace-name>-8501.app.github.dev
-```
-
-This URL is generated dynamically by GitHub Codespaces and will change between sessions.
-
----
-
-## Requirements
-
-- Python 3.10+
-- streamlit >= 1.31
-- pandas >= 1.5
-- numpy >= 1.23
-- plotly >= 5.18
-- scipy >= 1.10
-- statsmodels >= 0.14
