@@ -1,8 +1,10 @@
+import os
 import sqlite3
 import pandas as pd
 
-DATA_PATH = "cell-count.csv"
-DB_PATH = "cell_counts.db"
+_HERE = os.path.dirname(os.path.abspath(__file__))
+DATA_PATH = os.path.join(_HERE, "cell-count.csv")
+DB_PATH = os.path.join(_HERE, "..", "cell_counts.db")
 
 ALL_COLUMNS = [
     "project",

@@ -10,9 +10,9 @@ def _db_ready() -> bool:
     try:
         import os
         conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), "..", "cell_counts.db"))
-        conn.execute("SELECT 1 FROM projects LIMIT 1")
+        row = conn.execute("SELECT 1 FROM projects LIMIT 1").fetchone()
         conn.close()
-        return True
+        return row is not None
     except Exception:
         return False
 
