@@ -163,8 +163,6 @@ Fact table storing observed counts.
 - `population_id` (foreign key to `cell_populations`)
 - `count` (non-negative)
 
-<img width="2117" height="1223" alt="image" src="https://github.com/user-attachments/assets/ce1d82c2-a1aa-4fdb-bee1-e3a4b687c954" />
-
 ### Rationale and Scalability
 
 - Normalization prevents duplicated metadata and inconsistent values
