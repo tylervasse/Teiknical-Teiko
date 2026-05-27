@@ -135,8 +135,6 @@ The database uses a normalized relational schema that separates core entities fr
 | `sex` | TEXT | Subject sex |
 | `response` | TEXT | Treatment response (yes/no; NULL if unknown) |
 
-Treatment is stored at the subject level because all samples from a subject share the same treatment. "None" treatment is stored as `NULL` rather than a dedicated row. Blank response values are stored as `NULL` rather than empty strings.
-
 
 #### `treatments`
 
@@ -176,12 +174,17 @@ Treatment is stored at the subject level because all samples from a subject shar
 
 ### Rationale and Scalability
 
-- Normalization prevents duplicated metadata and inconsistent values
-- Treatment at the subject level reflects the biological reality that subjects — not individual samples — receive treatments
-- Foreign keys enforce referential integrity
-- Long-format measurement storage supports aggregation and statistical analysis
+- **Normalization eliminates redundancy and prevents inconsistency.** Subject metadata (condition, sex, age, response, treatment) is stored once per subject rather than repeated across every sample row. At scale, this matters: with thousands of samples spread across hundreds of projects, a denormalized design would make cohort-level updates error-prone and inflate storage significantly.
 
-This design scales well to hundreds of projects and thousands of samples. New immune populations or additional studies can be added without schema changes, and indexing supports efficient filtering by project, condition, response, treatment, timepoint, and population.
+- **The four-level hierarchy (project → subject → sample → cell count) mirrors the structure of the data and enables multi-level aggregation.** Analytical questions naturally fall at different levels: comparing response rates across projects, tracking cell populations over time within a subject, or computing per-sample frequencies. The schema supports all of these with simple GROUP BY queries at the appropriate level.
+
+- **Long-format cell count storage keeps analytics flexible.** Each `(sample_id, population_id)` pair occupies its own row rather than spreading populations across columns. This means filtering, grouping, and aggregating by population is uniform regardless of how many populations exist. A wide format would require schema changes and query rewrites every time a new population was added, which breaks at scale.
+
+- **Lookup tables decouple identity from metadata.** Populations, treatments, and projects are each stored in their own table and referenced by ID. New populations, treatment arms, or studies are added by inserting rows which means no columns change and no existing queries break. This allows the schema to absorb new data shapes without migration.
+
+- **Foreign keys enforce referential integrity across the hierarchy.** As data volume grows across many ingestion runs, foreign key constraints ensure that no cell count can reference a sample that doesn't exist, and no sample can reference an unknown subject. This prevents silent data corruption that becomes hard to detect and clean up at scale.
+
+- **Indexing on join and filter columns keeps queries fast at scale.** High-cardinality filter columns \(`subject_id`, `sample_id`, `population_id`, and `time_from_treatment_start`\) are natural index candidates. With thousands of samples and millions of cell count rows, indexed lookups prevent full table scans when filtering by project, condition, timepoint, or population for any analytical query.
 
 ---
 
