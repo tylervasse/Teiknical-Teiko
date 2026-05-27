@@ -9,7 +9,7 @@ from pages.part4 import render_part4
 def _db_ready() -> bool:
     try:
         import os
-        conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), "cell_counts.db"))
+        conn = sqlite3.connect(os.path.join(os.path.dirname(__file__), "..", "cell_counts.db"))
         conn.execute("SELECT 1 FROM projects LIMIT 1")
         conn.close()
         return True

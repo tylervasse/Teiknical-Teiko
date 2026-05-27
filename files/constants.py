@@ -1,5 +1,5 @@
 import os
-DB_PATH = os.path.join(os.path.dirname(__file__), "cell_counts.db")
+DB_PATH = os.path.join(os.path.dirname(__file__), "..", "cell_counts.db")
 
 POP_ORDER = ["b_cell", "cd8_t_cell", "cd4_t_cell", "nk_cell", "monocyte"]
 POP_LABELS = {
