@@ -33,37 +33,46 @@ The goal of this project is to analyze immune cell population data from clinical
 
 ## How to Run the Project (GitHub Codespaces)
 
-The project includes a `.devcontainer` with Python 3.10 and automatic dependency setup. When opened in GitHub Codespaces, everything should be pre-installed and ready to run.
+### Automatic
+
+The project includes a `.devcontainer` that handles everything on startup.
 
 **Step 1 — Open in GitHub Codespaces**
 
-Click **Code → Codespaces → Create codespace on main** from the repository page. The devcontainer will automatically install all dependencies on startup.
+Click **Code → Codespaces → Create codespace on main** from the repository page.
 
-**Step 2 — Install dependencies (if needed)**
+**Step 2 — Wait for setup to complete**
 
-If dependencies are not already installed, run from the terminal:
+The devcontainer will automatically install all Python dependencies, Java, and Nextflow. Once ready, it will launch the dashboard and prompt you to open the forwarded port.
 
-```bash
-pip install -r files/requirements.txt
-```
 
-**Step 3 — SQLite Database**
+---
 
-A pre-built SQLite database (`cell_counts.db`) is included in the repository — no setup is required. If you wish to regenerate it from the original CSV for verification purposes:
+### Manual (Optional)
 
-```bash
-python files/db_creation.py
-```
+If you prefer to run steps yourself or need to rebuild any outputs, the following commands are available from the terminal.
 
-Console output will report the number of projects, subjects, samples, and cell count records inserted as a sanity check.
-
-**Step 4 — Launch the Dashboard**
+**Install dependencies**
 
 ```bash
-streamlit run files/streamlit_dashboard.py
+make setup
 ```
 
-GitHub Codespaces will detect the running server and prompt you to open the forwarded port. Open it in your browser to view the dashboard.
+**Run the full data pipeline** (rebuilds the database and regenerates all output files)
+
+```bash
+make pipeline
+```
+
+Console output from `load_data.py` will report the number of projects, subjects, samples, and cell count records inserted as a sanity check.
+
+**Launch the dashboard**
+
+```bash
+make dashboard
+```
+
+GitHub Codespaces will detect the running server and prompt you to open the forwarded port.
 
 ---
 
@@ -264,7 +273,6 @@ The dashboard contains three sections navigable using the ◀ ▶ arrows in the 
 - Statistical test selected automatically based on timepoint selection:
   - **LMEM** (linear mixed effects model, subject as random effect) when all timepoints or multiple timepoints are selected
   - **Mann-Whitney U** when exactly one timepoint is selected
-- Spinner shown while significance tests are running
 - Results table sorted by p-value; significant populations highlighted in a summary banner
 
 ### Subset Analysis (Part 4)
