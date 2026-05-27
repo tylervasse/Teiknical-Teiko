@@ -1,8 +1,26 @@
+import sqlite3
 import streamlit as st
 
 from pages.part2 import render_part2
 from pages.part3 import render_part3
 from pages.part4 import render_part4
+def _db_ready() -> bool:
+    try:
+        conn = sqlite3.connect("cell_counts.db")
+        conn.execute("SELECT 1 FROM projects LIMIT 1")
+        conn.close()
+        return True
+    except Exception:
+        return False
+
+
+if not _db_ready():
+    import db_creation
+    with st.spinner("Building database from CSV — please wait..."):
+        db_creation.main()
+    st.cache_data.clear()
+    st.cache_resource.clear()
+
 
 st.set_page_config(page_title="Loblaw Bio - Immune Dashboard", layout="wide")
 st.title("Loblaw Bio - Immune Cell Dashboard")
