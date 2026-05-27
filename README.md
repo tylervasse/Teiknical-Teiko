@@ -1,5 +1,5 @@
 # Teiko-Technical
-Interactive Streamlit dashboard for analyzing immune cell population dynamics in mock clinical trial data, integrating SQLite backed queries, statistical testing, and visualization.
+Interactive Streamlit dashboard for analyzing immune cell population dynamics in mock clinical trial data, integrating SQLite-backed queries, statistical testing, and visualization.
 
 ---
 
@@ -10,7 +10,7 @@ Interactive Streamlit dashboard for analyzing immune cell population dynamics in
 - [How to Run the Project (GitHub Codespaces)](#how-to-run-the-project-github-codespaces)
   - [Install Python Dependencies](#install-python-dependencies)
   - [Build the SQLite Database (Part 1)](#build-the-sqlite-database-part-1)
-  - [Launch the Dashboard (Parts 2–4)](#launch-the-dashboard-parts-2-4)
+  - [Launch the Dashboard (Parts 2–4)](#launch-the-dashboard-parts-24)
 - [Database Schema Design and Scalability](#database-schema-design-and-scalability)
 - [Code Structure Overview](#code-structure-overview)
 - [Dashboard Features](#dashboard-features)
@@ -31,24 +31,33 @@ The goal of this project is to analyze immune cell population data from clinical
 
 ## Repository Contents
 
-The repository contains the following files:
-
-## Repository Contents
-
-The repository contains the following files:
-
 - `cell-count.csv`  
   Original CSV file provided for the assignment
 
 - `cell_counts.db`  
-  Pre-built SQLite database generated from `cell-count.csv`  
+  Pre-built SQLite database generated from `cell-count.csv`
 
 - `db_creation.py`  
   Script for database schema creation and data loading  
   (optional: the database is already provided, but can be rebuilt if desired)
 
 - `streamlit_dashboard.py`  
-  Streamlit dashboard for Parts 2–4
+  Main Streamlit entry point; handles page navigation and global layout
+
+- `db.py`  
+  Cached database connection and all SQL query functions
+
+- `tables.py`  
+  Custom HTML table renderers (required long table, generic styled table)
+
+- `components.py`  
+  Pagination controls and shared UI components
+
+- `constants.py`  
+  Shared constants (column definitions, population order, layout widths)
+
+- `pages/part2.py`, `pages/part3.py`, `pages/part4.py`  
+  Page-level render functions for each dashboard section
 
 - `requirements.txt`  
   Python dependencies required to run the project
@@ -70,7 +79,7 @@ pip install -r requirements.txt
 If you prefer to install dependencies manually:
 
 ```bash
-pip install streamlit pandas numpy plotly scipy
+pip install streamlit pandas numpy plotly scipy statsmodels
 ```
 
 ---
@@ -109,59 +118,59 @@ GitHub Codespaces will detect the running server and prompt you to open the forw
 
 ## Database Schema Design and Scalability
 
-I designed the database using a normalized relational schema that separates core entities from sample specific details.
+The database uses a normalized relational schema that separates core entities from sample-specific details.
 
 ### Schema Overview
 
-**projects**
+**projects**  
 Stores one row per clinical project.
 
-* `project_id` (primary key)
+- `project_id` (primary key)
 
-**subjects**
+**subjects**  
 Stores one row per subject or patient.
 
-* `subject_id` (primary key)
-* `project_id` (foreign key to `projects`)
-* `condition`, `age`, `sex`, `response`
+- `subject_id` (primary key)
+- `project_id` (foreign key to `projects`)
+- `treatment_id` (foreign key to `treatments`)
+- `condition`, `age`, `sex`, `response`
 
-Subject-level metadata is stored once rather than repeated for every sample.
+Treatment is stored at the subject level because all samples from a subject share the same treatment. Subjects with no treatment have `treatment_id = NULL`. Subjects with no recorded response also store `NULL` rather than a blank string.
 
-**treatments**
-Lookup table for treatment names.
+**treatments**  
+Lookup table for treatment names. Only real treatments are stored — "none" is represented by `treatment_id = NULL` on the subject rather than a dedicated row.
 
-* `treatment_id` (primary key)
-* `name` (unique)
+- `treatment_id` (primary key)
+- `name` (unique)
 
-**samples**
+**samples**  
 Stores one row per biological sample.
 
-* `sample_id` (primary key)
-* `subject_id` (foreign key to `subjects`)
-* `treatment_id` (foreign key to `treatments`)
-* `sample_type`, `time_from_treatment_start`
+- `sample_id` (primary key)
+- `subject_id` (foreign key to `subjects`)
+- `sample_type`, `time_from_treatment_start`
 
-**cell_populations**
+**cell_populations**  
 Lookup table for immune cell populations.
 
-* `population_id` (primary key)
-* `name` (unique)
+- `population_id` (primary key)
+- `name` (unique)
 
-**cell_counts**
+**cell_counts**  
 Fact table storing observed counts.
 
-* `sample_id` (foreign key to `samples`)
-* `population_id` (foreign key to `cell_populations`)
-* `count` (non-negative)
+- `sample_id` (foreign key to `samples`)
+- `population_id` (foreign key to `cell_populations`)
+- `count` (non-negative)
 
 <img width="2117" height="1223" alt="image" src="https://github.com/user-attachments/assets/ce1d82c2-a1aa-4fdb-bee1-e3a4b687c954" />
 
-
 ### Rationale and Scalability
 
-* Normalization prevents duplicated metadata and inconsistent values
-* Foreign keys enforce referential integrity
-* Long-format measurement storage supports aggregation and statistical analysis
+- Normalization prevents duplicated metadata and inconsistent values
+- Treatment at the subject level reflects the biological reality that subjects — not individual samples — receive treatments
+- Foreign keys enforce referential integrity
+- Long-format measurement storage supports aggregation and statistical analysis
 
 This design scales well to hundreds of projects and thousands of samples. New immune populations or additional studies can be added without schema changes, and indexing supports efficient filtering by project, condition, response, treatment, timepoint, and population.
 
@@ -169,41 +178,61 @@ This design scales well to hundreds of projects and thousands of samples. New im
 
 ## Code Structure Overview
 
-The project is split into two main components.
+The project is organized into several focused modules.
 
 ### `db_creation.py`
 
-This script handles database creation and data loading. It defines the SQLite schema, validates the input CSV, inserts normalized data into relational tables, and performs basic sanity checks.
+Handles database creation and data loading. Defines the SQLite schema, validates the input CSV, inserts normalized data into relational tables, and performs basic sanity checks. Skips inserting "none" as a treatment row; maps it to `NULL` on the subject instead.
+
+### `db.py`
+
+Contains all database access logic. Uses `@st.cache_resource` for the connection and `@st.cache_data` for query results to avoid redundant computation. Query functions support flexible filtering by project, condition, response, treatment, sample type, and timepoint.
+
+### `tables.py`
+
+Provides two HTML table renderers using `st.components.v1.html`:
+
+- `render_required_long_table_html` — paginated table for the overview with sortable columns, red sticky header, and per-column formatting
+- `render_html_table` — generic renderer for any DataFrame with the same red-header styling, sortable columns, and an optional gray first column
+
+### `components.py`
+
+Provides the pagination control widget (page number input, prev/next buttons, total pages display) used by the overview table.
 
 ### `streamlit_dashboard.py`
 
-This file contains the Streamlit dashboard. The dashboard is organized into three pages corresponding to Parts 2, 3, and 4 of the assignment. SQL is used for joins and aggregation, while Python handles presentation, statistics, and visualization.
-
-Streamlit caching is used to avoid unnecessary recomputation, and custom HTML is used where precise table layout control is required.
+Main entry point. Defines the section list, handles arrow-based navigation between pages via `st.session_state`, and injects global CSS (including suppression of Streamlit's auto-generated sidebar page navigation).
 
 ---
 
 ## Dashboard Features
 
-The dashboard contains three pages, navigable using the arrows in the top-left corner.
+The dashboard contains three sections navigable using the ◀ ▶ arrows in the sidebar.
 
-### Part 2: Data Overview
+### Overview (Part 2)
 
-* Sidebar filters for subsetting data
-* Paginated tables
-* CSV export buttons
+- Sidebar filters: project, condition, response, treatment, sample type, sample name search (multiselect with autocomplete), sample range input (e.g. `s001-s050`), and a **Clear all filters** button
+- Custom HTML table with red sticky header, sortable columns, vertical separator lines, and right-aligned numeric/population columns
+- Full-precision percentage values (not rounded before display)
+- Paginated output with configurable page size
+- CSV export for both the filtered view and the full dataset
 
-### Part 3: Statistical Analysis
+### Response Group Comparison (Part 3)
 
-* Defaults match assignment requirements (melanoma, PBMC, miraclib)
-* Boxplots comparing responders and non-responders by immune population
-* Statistical significance updates based on selected test and alpha level
+- Sidebar filters: project, condition, treatment, sample type, timepoints multiselect, significance level (α), and individual sample point overlay toggle
+- Custom side-by-side boxplots (responders vs non-responders) built with Plotly, using IQR whiskers and jittered point overlay
+- Statistical test selected automatically based on timepoint selection:
+  - **LMEM** (linear mixed effects model, subject as random effect) when all timepoints or multiple timepoints are selected
+  - **Mann-Whitney U** when exactly one timepoint is selected
+- Spinner shown while significance tests are running
+- Results table sorted by p-value; significant populations highlighted in a summary banner
 
-### Part 4: Subset Analysis
+### Subset Analysis (Part 4)
 
-* Defaults match assignment requirements (melanoma, PBMC, miraclib, time = 0)
-* Summary tables showing counts by project, response, and sex
-* Required question reports the average number of B cells for melanoma male responders at time 0, formatted to two decimals
+- Sidebar filters: condition, sample type, treatment, time from treatment start
+- Matching samples table with sample column first and gray first-column styling; styled to match the overview table
+- Subset summary tables (samples by project, subjects by response, subjects by sex) displayed at reduced width with the same red-header styling and sortable columns
+- Required question: average B cell count for melanoma male responders at time = 0, with expandable contributing rows table
 
 ---
 
@@ -225,6 +254,16 @@ The URL will look similar to:
 https://<codespace-name>-8501.app.github.dev
 ```
 
-This URL is generated dynamically by GitHub Codespaces and will change between sessions. 
+This URL is generated dynamically by GitHub Codespaces and will change between sessions.
 
+---
 
+## Requirements
+
+- Python 3.10+
+- streamlit >= 1.31
+- pandas >= 1.5
+- numpy >= 1.23
+- plotly >= 5.18
+- scipy >= 1.10
+- statsmodels >= 0.14

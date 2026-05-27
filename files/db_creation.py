@@ -29,6 +29,11 @@ CREATE TABLE IF NOT EXISTS projects (
     project_id TEXT PRIMARY KEY
 );
 
+CREATE TABLE IF NOT EXISTS treatments (
+    treatment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE
+);
+
 CREATE TABLE IF NOT EXISTS subjects (
     subject_id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,
@@ -36,22 +41,17 @@ CREATE TABLE IF NOT EXISTS subjects (
     age INTEGER,
     sex TEXT,
     response TEXT,
-    FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS treatments (
-    treatment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
+    treatment_id INTEGER,
+    FOREIGN KEY(project_id) REFERENCES projects(project_id) ON DELETE CASCADE,
+    FOREIGN KEY(treatment_id) REFERENCES treatments(treatment_id) ON DELETE RESTRICT
 );
 
 CREATE TABLE IF NOT EXISTS samples (
     sample_id TEXT PRIMARY KEY,
     subject_id TEXT NOT NULL,
-    treatment_id INTEGER,
     sample_type TEXT,
     time_from_treatment_start REAL,
-    FOREIGN KEY(subject_id) REFERENCES subjects(subject_id) ON DELETE CASCADE,
-    FOREIGN KEY(treatment_id) REFERENCES treatments(treatment_id) ON DELETE RESTRICT
+    FOREIGN KEY(subject_id) REFERENCES subjects(subject_id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS cell_populations (
@@ -70,9 +70,9 @@ CREATE TABLE IF NOT EXISTS cell_counts (
 
 CREATE INDEX IF NOT EXISTS idx_subjects_project ON subjects(project_id);
 CREATE INDEX IF NOT EXISTS idx_subjects_condition ON subjects(condition);
-CREATE INDEX IF NOT EXISTS idx_samples_subject ON samples(subject_id);
-CREATE INDEX IF NOT EXISTS idx_samples_treatment ON samples(treatment_id);
+CREATE INDEX IF NOT EXISTS idx_subjects_treatment ON subjects(treatment_id);
 CREATE INDEX IF NOT EXISTS idx_subjects_response ON subjects(response);
+CREATE INDEX IF NOT EXISTS idx_samples_subject ON samples(subject_id);
 CREATE INDEX IF NOT EXISTS idx_samples_time ON samples(time_from_treatment_start);
 CREATE INDEX IF NOT EXISTS idx_cell_counts_population ON cell_counts(population_id);
 CREATE INDEX IF NOT EXISTS idx_cell_counts_sample ON cell_counts(sample_id);
@@ -108,36 +108,39 @@ def load_data_from_csv_to_db(file_path, conn):
         conn.execute("INSERT OR IGNORE INTO projects(project_id) VALUES (?)", (proj,))
     conn.commit()
 
-    # inserting subjects data
-    subjects_df = df[["subject", "project", "condition", "age", "sex", "response"]].drop_duplicates(subset=["subject"]).copy()
+    # inserting treatments data ("none" is absence of treatment → NULL, not a real treatment)
+    for t in df["treatment"].dropna().unique():
+        if str(t).strip().lower() != "none":
+            conn.execute("INSERT OR IGNORE INTO treatments(name) VALUES (?)", (t,))
+    conn.commit()
+
+    treatment_map = dict(conn.execute("SELECT name, treatment_id FROM treatments").fetchall())
+
+    # inserting subjects data (treatment_id at subject level; blank response → NULL)
+    subjects_df = df[["subject", "project", "condition", "age", "sex", "response", "treatment"]].drop_duplicates(subset=["subject"]).copy()
     subjects_df["age"] = pd.to_numeric(subjects_df["age"], errors="coerce")
     subjects_df["age"] = subjects_df["age"].apply(lambda x: int(x) if pd.notna(x) else None)
+    subjects_df["response"] = subjects_df["response"].apply(
+        lambda x: (str(x).strip() or None) if pd.notna(x) else None
+    )
+    subjects_df["treatment_id"] = subjects_df["treatment"].map(treatment_map).apply(
+        lambda x: int(x) if pd.notna(x) else None
+    )
 
     conn.executemany(
-        "INSERT OR REPLACE INTO subjects(subject_id, project_id, condition, age, sex, response) VALUES (?, ?, ?, ?, ?, ?)",
-        subjects_df.itertuples(index=False, name=None),
+        "INSERT OR REPLACE INTO subjects(subject_id, project_id, condition, age, sex, response, treatment_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        subjects_df[["subject", "project", "condition", "age", "sex", "response", "treatment_id"]]
+            .itertuples(index=False, name=None),
     )
     conn.commit()
 
-    # inserting treatments data
-    for t in df["treatment"].dropna().unique():
-        conn.execute("INSERT OR IGNORE INTO treatments(name) VALUES (?)", (t,))
-    conn.commit()
-    
-    treatment_map = dict(conn.execute("SELECT name, treatment_id FROM treatments").fetchall()) # updatable treatment map 
-
-    # inserting samples data
-    samples_df = df[["sample", "subject", "treatment", "sample_type", "time_from_treatment_start"]].copy()
+    # inserting samples data (treatment moved to subjects)
+    samples_df = df[["sample", "subject", "sample_type", "time_from_treatment_start"]].copy()
     samples_df["time_from_treatment_start"] = pd.to_numeric(samples_df["time_from_treatment_start"], errors="coerce")
-    samples_df["treatment_id"] = samples_df["treatment"].map(treatment_map)
-
-    if samples_df["treatment_id"].isna().any():
-        bad = samples_df[samples_df["treatment_id"].isna()]["treatment"].unique()
-        raise Exception(f"Unmapped treatment(s): {bad}")
 
     conn.executemany(
-        "INSERT OR REPLACE INTO samples(sample_id, subject_id, treatment_id, sample_type, time_from_treatment_start) VALUES (?, ?, ?, ?, ?)",
-        samples_df[["sample", "subject", "treatment_id", "sample_type", "time_from_treatment_start"]]
+        "INSERT OR REPLACE INTO samples(sample_id, subject_id, sample_type, time_from_treatment_start) VALUES (?, ?, ?, ?)",
+        samples_df[["sample", "subject", "sample_type", "time_from_treatment_start"]]
             .itertuples(index=False, name=None),
     )
     conn.commit()
