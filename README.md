@@ -141,17 +141,19 @@ The database uses a normalized relational schema that separates core entities fr
 
 ### Rationale and Scalability
 
-- **Normalization eliminates redundancy and prevents inconsistency.** Subject metadata (condition, sex, age, response, treatment) is stored once per subject rather than repeated across every sample row. At scale, this matters: with thousands of samples spread across hundreds of projects, a denormalized design would make cohort-level updates error-prone and inflate storage significantly.
+- **Normalization eliminates redundancy and prevents inconsistency.** Subject metadata (condition, sex, age, response, treatment) is stored once per subject rather than repeated across every sample row. At scale, with thousands of samples spread across hundreds of projects, a denormalized design would make cohort-level updates error-prone and inflate storage significantly. The four-level hierarchy (project → subject → sample → cell count) maps naturally to how analytical questions are asked — response rates at the project level, longitudinal trends at the subject level, population frequencies at the sample level — each addressable with a simple GROUP BY at the appropriate level.
 
-- **The four-level hierarchy (project → subject → sample → cell count) mirrors the structure of the data and enables multi-level aggregation.** Analytical questions naturally fall at different levels: comparing response rates across projects, tracking cell populations over time within a subject, or computing per-sample frequencies. The schema supports all of these with simple GROUP BY queries at the appropriate level.
+- **Long-format cell count storage and lookup tables absorb new data without migration.** Each `(sample_id, population_id)` pair occupies its own row rather than spreading populations across columns, so filtering, grouping, and aggregating by population is uniform regardless of how many populations exist. Adding new populations, treatments, or projects is a row insert — no columns change and no existing queries break.
 
-- **Long-format cell count storage keeps analytics flexible.** Each `(sample_id, population_id)` pair occupies its own row rather than spreading populations across columns. This means filtering, grouping, and aggregating by population is uniform regardless of how many populations exist. A wide format would require schema changes and query rewrites every time a new population was added, which breaks at scale.
+- **Foreign keys and indexes maintain correctness and performance at scale.** Referential integrity constraints ensure no cell count can reference a sample that doesn't exist and no sample can reference an unknown subject, preventing silent data corruption across many ingestion runs. Indexes on `subject_id`, `sample_id`, `population_id`, and `time_from_treatment_start` prevent full table scans when filtering by project, condition, timepoint, or population as rows scale into the millions.
 
-- **Lookup tables decouple identity from metadata.** Populations, treatments, and projects are each stored in their own table and referenced by ID. New populations, treatment arms, or studies are added by inserting rows which means no columns change and no existing queries break. This allows the schema to absorb new data shapes without migration.
+### Analytics This Schema Supports
 
-- **Foreign keys enforce referential integrity across the hierarchy.** As data volume grows across many ingestion runs, foreign key constraints ensure that no cell count can reference a sample that doesn't exist, and no sample can reference an unknown subject. This prevents silent data corruption that becomes hard to detect and clean up at scale.
-
-- **Indexing on join and filter columns keeps queries fast at scale.** High-cardinality filter columns \(`subject_id`, `sample_id`, `population_id`, and `time_from_treatment_start`\) are natural index candidates. With thousands of samples and millions of cell count rows, indexed lookups prevent full table scans when filtering by project, condition, timepoint, or population for any analytical query.
+- **Linear mixed-effects modelling (LMEM)** - model population frequencies as the outcome with response as a fixed effect and subject as a random effect, correctly accounting for repeated measures across timepoints as the number of subjects and visits grows
+- **Mann-Whitney U / Wilcoxon rank-sum** - non-parametric comparison of population frequencies between responders and non-responders at a single timepoint (e.g. baseline), with no normality assumption
+- **Logistic regression** - predict binary treatment response from baseline cell population frequencies, with sex, age, and condition as covariates, joinable directly from the subjects table
+- **Delta analysis** - compute the change in each cell population frequency from baseline (time = 0) to a later timepoint for each subject, then compare those deltas between responders and non-responders; this characterises what an immunological response looks like over the course of treatment without requiring an explicit response onset timepoint, since the `response` label in the dataset is a clinical endpoint that may lag behind the underlying immune changes
+- **Spearman correlation** - pivot cell counts into a wide per-sample matrix and compute rank-based correlations between populations to identify co-varying immune phenotypes (e.g. whether high CD8 T cell frequency is consistently associated with low B cell frequency across samples); PCA is not used here as there is no meaningful dimensionality to reduce with only five populations, but would scale naturally if a broader immune panel were captured
 
 ---
 
@@ -185,36 +187,33 @@ Teiknical-Teiko/
 
 <br>
 
-#### `streamlit_dashboard.py`
+#### Root
 
-Main entry point. Defines the section list, handles arrow-based navigation between pages via `st.session_state`, and injects global CSS (including suppression of Streamlit's auto-generated sidebar page navigation).
+| File | Description |
+|------|-------------|
+| `load_data.py` | Entry point for Part 1 — initializes the SQLite schema and loads `cell-count.csv` into the database |
+| `pipeline.py` | Generates all static output files for Parts 2–4 (frequency CSV, boxplot PNG, statistics CSV, subset CSVs) |
+| `cell-count.csv` | Raw input data containing cell counts and sample metadata |
+| `Makefile` | Defines the three graded targets: `setup`, `pipeline`, and `dashboard` |
+| `requirements.txt` | Python dependencies installed by `make setup` |
 
-#### `db_creation.py`
+#### `app/`
 
-Handles database creation and data loading. Defines the SQLite schema, validates the input CSV, inserts normalized data into relational tables, and performs basic sanity checks. Skips inserting "none" as a treatment row; maps it to `NULL` on the subject instead.
+| File | Description |
+|------|-------------|
+| `streamlit_dashboard.py` | Main entry point — defines section list, handles sidebar navigation, and injects global CSS |
+| `db_creation.py` | Defines the SQLite schema, validates the CSV, and loads normalized data into the database; maps `"none"` treatment to `NULL` |
+| `db.py` | All database access logic — cached connection via `@st.cache_resource`, cached query results via `@st.cache_data`, with flexible filtering by project, condition, treatment, sample type, and timepoint |
+| `tables.py` | HTML table renderers using `st.iframe` for the sortable red-header tables used across all three pages |
+| `components.py` | Pagination widget (prev/next buttons, page input, total pages) used by the Part 2 overview table |
+| `constants.py` | Shared constants — column definitions, population order and labels, layout widths, and the database path |
+| `pages/part2.py` | Overview page — frequency table with sidebar filters, pagination, stacked bar chart, and CSV export |
+| `pages/part3.py` | Response comparison page — Plotly boxplots and LMEM / Mann-Whitney U significance testing |
+| `pages/part4.py` | Subset analysis page — filtered sample table, summary breakdowns, and average B cell count |
 
-#### `db.py`
+### Design Rationale
 
-Contains all database access logic. Uses `@st.cache_resource` for the connection and `@st.cache_data` for query results to avoid redundant computation. Query functions support flexible filtering by project, condition, response, treatment, sample type, and timepoint.
-
-#### `tables.py`
-
-Provides two HTML table renderers using `st.components.v1.html`:
-
-- `render_required_long_table_html` — paginated table for the overview with sortable columns, red sticky header, and per-column formatting
-- `render_html_table` — generic renderer for any DataFrame with the same red-header styling, sortable columns, and an optional gray first column
-
-#### `components.py`
-
-Provides the pagination control widget (page number input, prev/next buttons, total pages display) used by the overview table.
-
-#### `constants.py`
-
-Shared constants including column definitions, population order and labels, layout widths, and the database path.
-
-#### `pages/part2.py`, `pages/part3.py`, `pages/part4.py`
-
-Page-level render functions for the Overview, Response Group Comparison, and Subset Analysis sections respectively.
+The `app/` directory separates the dashboard logic from the pipeline scripts at the root, keeping the two concerns independent — `load_data.py` and `pipeline.py` can be run headlessly by the grader without touching any Streamlit code. Within `app/`, database access is isolated in `db.py` so that all caching, connection management, and query logic lives in one place and pages never open their own connections. Each page is a single render function in its own file, which makes the sections independently readable and testable. Shared state (constants, table renderers, pagination) is extracted into `constants.py`, `tables.py`, and `components.py` to avoid duplication across the three pages.
 
 ---
 
@@ -226,27 +225,20 @@ The dashboard contains three sections navigable using the ◀ ▶ arrows in the 
 
 ### Overview (Part 2)
 
-- Sidebar filters: project, condition, response, treatment, sample type, sample name search (multiselect with autocomplete), sample range input (e.g. `s001-s050`), and a **Clear all filters** button
-- Custom HTML table with red sticky header, sortable columns, vertical separator lines, and right-aligned numeric/population columns
-- Full-precision percentage values (not rounded before display)
-- Paginated output with configurable page size
-- CSV export for both the filtered view and the full dataset
+- Interactive frequency table showing relative frequency (%) of each cell population per sample, with sortable columns, full-precision percentages, and paginated output
+- Sidebar filters for project, condition, response, treatment, sample type, and sample name search with range input (e.g. `s001-s050`)
+- CSV export of the filtered view
 
 ### Response Group Comparison (Part 3)
 
-- Sidebar filters: project, condition, treatment, sample type, timepoints multiselect, significance level (α), and individual sample point overlay toggle
-- Custom side-by-side boxplots (responders vs non-responders) built with Plotly, using IQR whiskers and jittered point overlay
-- Statistical test selected automatically based on timepoint selection:
-  - **LMEM** (linear mixed effects model, subject as random effect) when all timepoints or multiple timepoints are selected. While LMEM has limited impact on this dataset given only three timepoints, it is the right choice at scale because it correctly models within-subject correlation across repeated measures, growing more statistically meaningful and reliable as subjects, timepoints, and projects accumulate.
-  - **Mann-Whitney U** when exactly one timepoint is selected
-- Results table sorted by p-value; significant populations highlighted in a summary banner
+- Side-by-side boxplots (responders vs non-responders) per cell population with IQR whiskers and jittered point overlay
+- Statistical test selected automatically: **LMEM** (subject as random effect) for multiple timepoints (models within-subject correlation across repeated measures) and **Mann-Whitney U** for a single timepoint
+- Results table sorted by p-value with significant populations highlighted in a summary banner
 
 ### Subset Analysis (Part 4)
 
-- Sidebar filters: condition, sample type, treatment, time from treatment start
-- Matching samples table with sample column first and gray first-column styling; styled to match the overview table
-- Subset summary tables (samples by project, subjects by response, subjects by sex) displayed at reduced width with the same red-header styling and sortable columns
-- Required question: average B cell count for melanoma male responders at time = 0, with expandable contributing rows table
+- Filterable sample table (condition, sample type, treatment, timepoint) with summary breakdowns by project, response, and sex
+- Average B cell count for melanoma male responders at time = 0 with expandable contributing rows
 
 ---
 

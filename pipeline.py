@@ -219,25 +219,23 @@ avg_b = pd.read_sql_query("""
     JOIN samples sa          ON sa.sample_id     = cc.sample_id
     JOIN subjects sub        ON sub.subject_id   = sa.subject_id
     JOIN cell_populations cp ON cp.population_id = cc.population_id
-    LEFT JOIN treatments t   ON t.treatment_id   = sub.treatment_id
     WHERE LOWER(cp.name)                  = 'b_cell'
       AND LOWER(sub.condition)            = 'melanoma'
       AND TRIM(sub.sex)                   = 'M'
       AND LOWER(COALESCE(sub.response,''))= 'yes'
       AND sa.time_from_treatment_start    = 0
-      AND LOWER(COALESCE(t.name,''))      = 'miraclib'
 """, conn).iloc[0, 0]
 
 conn.close()
 
 answer = f"{avg_b:.2f}" if avg_b is not None else "N/A"
 with open(os.path.join(OUT_DIR, "part4_avg_b_cells.txt"), "w") as f:
-    f.write(f"Average B cells (melanoma, male, responders, time=0, miraclib): {answer}\n")
+    f.write(f"Average B cells (melanoma, male, responders, time=0): {answer}\n")
 
 print(f"  Saved part4_matching_samples.csv  ({len(df_p4)} rows)")
 print(f"  Saved part4_samples_by_project.csv")
 print(f"  Saved part4_subjects_by_response.csv")
 print(f"  Saved part4_subjects_by_sex.csv")
 print(f"  Saved part4_avg_b_cells.txt")
-print(f"\n  Average B cells (melanoma, M, responders, time=0, miraclib): {answer}")
+print(f"\n  Average B cells (melanoma, M, responders, time=0): {answer}")
 print(f"\nAll outputs written to: {OUT_DIR}/")

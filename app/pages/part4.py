@@ -149,7 +149,6 @@ def render_part4():
     st.subheader("Required question")
 
     conn = get_conn(DB_PATH)
-    params = [treatment4, treatment4]
 
     avg_sql = """
     SELECT AVG(cc.count) AS avg_b_cells
@@ -157,27 +156,23 @@ def render_part4():
     JOIN samples sa ON sa.sample_id = cc.sample_id
     JOIN subjects sub ON sub.subject_id = sa.subject_id
     JOIN cell_populations cp ON cp.population_id = cc.population_id
-    LEFT JOIN treatments t ON t.treatment_id = sub.treatment_id
     WHERE LOWER(cp.name) = 'b_cell'
       AND LOWER(sub.condition) = 'melanoma'
       AND TRIM(sub.sex) = 'M'
       AND LOWER(COALESCE(sub.response,'')) = 'yes'
-      AND sa.time_from_treatment_start = 0
-      AND (? IS NULL OR LOWER(t.name) = LOWER(?));
+      AND sa.time_from_treatment_start = 0;
     """
 
-    avg_df = pd.read_sql_query(avg_sql, conn, params=params)
+    avg_df = pd.read_sql_query(avg_sql, conn)
     avg_b = avg_df.loc[0, "avg_b_cells"]
 
     if pd.isna(avg_b):
         st.warning(
-            "No rows found for: melanoma + males (M) + responders (yes) + time=0 + B Cells "
-            f"{'(and treatment filter applied)' if treatment4 else '(any treatment)'}."
+            "No rows found for: melanoma + males (M) + responders (yes) + time=0 + B Cells."
         )
     else:
         st.success(
-            f"**Average # of B cells (melanoma, M, responders, time=0"
-            f"{', ' + str(treatment4) if treatment4 else ''}): {avg_b:.2f}**"
+            f"**Average # of B cells (melanoma, M, responders, time=0): {avg_b:.2f}**"
         )
 
         rows_sql = """
@@ -189,16 +184,14 @@ def render_part4():
         JOIN samples sa ON sa.sample_id = cc.sample_id
         JOIN subjects sub ON sub.subject_id = sa.subject_id
         JOIN cell_populations cp ON cp.population_id = cc.population_id
-        LEFT JOIN treatments t ON t.treatment_id = sub.treatment_id
         WHERE LOWER(cp.name) = 'b_cell'
           AND LOWER(sub.condition) = 'melanoma'
           AND TRIM(sub.sex) = 'M'
           AND LOWER(COALESCE(sub.response,'')) = 'yes'
           AND sa.time_from_treatment_start = 0
-          AND (? IS NULL OR LOWER(t.name) = LOWER(?))
         ORDER BY sub.subject_id, sa.sample_id;
         """
 
-        rows_df = pd.read_sql_query(rows_sql, conn, params=params)
+        rows_df = pd.read_sql_query(rows_sql, conn)
         with st.expander("Show contributing rows"):
             render_html_table(rows_df)
