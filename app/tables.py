@@ -99,28 +99,33 @@ def render_required_sort_header(page_key: str):
 
 
 def render_required_long_table_html(
-    df_required_page: pd.DataFrame,
-    height_px: int = 560,
+    df: pd.DataFrame,
+    height_px: int = 600,
     sort_key: str = "sample",
     sort_dir: str = "asc",
 ):
-    # Adjust these percentages to change column widths (must sum to ~100)
-    # Order: [idx, sample, total_count, population, count, percentage]
+    import json
+
     COL_WIDTHS_PCT = [8, 24, 17, 17, 14, 20]
-
-    colgroup = "<colgroup>" + "".join([f'<col style="width:{p}%">' for p in COL_WIDTHS_PCT]) + "</colgroup>"
-
-    # j indices: 0=idx, 1=sample, 2=total_count, 3=population, 4=count, 5=percentage
-    NUM_COLS = {2, 4, 5}       # numeric JS sort
-    RIGHT_ALIGN_COLS = {2, 3, 4, 5}  # right-aligned body cells (includes population)
-
+    NUM_COLS_SET = {2, 4, 5}
+    RIGHT_ALIGN_COLS = {2, 3, 4, 5}
     KEY_TO_COL = {"sample": 1, "total_count": 2, "population": 3, "count": 4, "percentage": 5}
     sort_col_idx = KEY_TO_COL.get(sort_key, 1)
+    N_COLS = 6
+
+    HEADER_DEFS = [
+        ("",            "",             False),
+        ("sample",      "sample",       False),
+        ("total_count", "total_count",  True),
+        ("population",  "population",   False),
+        ("count",       "count",        True),
+        ("percentage",  "percentage",   True),
+    ]
 
     def fmt_val(j: int, val) -> str:
         if pd.isna(val):
             return "—"
-        if j == 2 or j == 4:
+        if j in (2, 4):
             try:
                 return f"{int(val):,}"
             except Exception:
@@ -132,15 +137,25 @@ def render_required_long_table_html(
                 return str(val)
         return str(val)
 
-    # (col_key, display_text, is_num) — empty col_key = non-sortable idx column
-    HEADER_DEFS = [
-        ("",            "",             False),
-        ("sample",      "sample",       False),
-        ("total_count", "total_count",  True),
-        ("population",  "population",   False),
-        ("count",       "count",        True),
-        ("percentage",  "percentage",   True),
-    ]
+    # Serialise all rows as {f: [formatted strings], r: [raw values for sorting]}
+    rows_data = []
+    for row in df.itertuples(index=False, name=None):
+        formatted = [fmt_val(j, v) for j, v in enumerate(row)]
+        raw = []
+        for j, v in enumerate(row):
+            if j in NUM_COLS_SET:
+                try:
+                    raw.append(None if pd.isna(v) else float(v))
+                except Exception:
+                    raw.append(None)
+            else:
+                raw.append("" if pd.isna(v) else str(v))
+        rows_data.append({"f": formatted, "r": raw})
+
+    rows_json       = json.dumps(rows_data, ensure_ascii=False)
+    right_align_json = json.dumps(list(RIGHT_ALIGN_COLS))
+
+    colgroup = "<colgroup>" + "".join([f'<col style="width:{p}%">' for p in COL_WIDTHS_PCT]) + "</colgroup>"
 
     header_cells = []
     for i, (col_key, col_text, is_num) in enumerate(HEADER_DEFS):
@@ -206,25 +221,76 @@ def render_required_long_table_html(
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
+        height: 37px;
+        box-sizing: border-box;
       }}
       table.req tbody td:last-child {{ border-right: none; }}
       table.req tbody tr:hover td {{ background: #fafafa; }}
       table.req tbody td.idx {{ color: #999; text-align: right; }}
       table.req tbody td.num {{ text-align: right; }}
+      table.req tbody td.spacer {{ border: none; padding: 0; }}
     </style>
     """
 
     js = f"""
     <script>
-    var sortCol = {sort_col_idx};
-    var sortDir = '{sort_dir}';
+    var allRows      = {rows_json};
+    var sortCol      = {sort_col_idx};
+    var sortDir      = '{sort_dir}';
+    var ROW_HEIGHT   = 37;
+    var BUFFER       = 25;
+    var N_COLS       = {N_COLS};
+    var rightAlign   = new Set({right_align_json});
+
+    var container  = document.querySelector('.req-wrap');
+    var tbody      = document.querySelector('table.req tbody');
+
+    var topTd      = document.createElement('td');
+    var bottomTd   = document.createElement('td');
+    topTd.colSpan    = N_COLS;
+    bottomTd.colSpan = N_COLS;
+    topTd.className    = 'spacer';
+    bottomTd.className = 'spacer';
+    var topRow     = document.createElement('tr');
+    var bottomRow  = document.createElement('tr');
+    topRow.appendChild(topTd);
+    bottomRow.appendChild(bottomTd);
+    tbody.appendChild(topRow);
+    tbody.appendChild(bottomRow);
+
+    function makeRow(rowData) {{
+      var tr = document.createElement('tr');
+      rowData.f.forEach(function(val, j) {{
+        var td = document.createElement('td');
+        if (j === 0)              td.className = 'idx';
+        else if (rightAlign.has(j)) td.className = 'num';
+        td.textContent = val;
+        tr.appendChild(td);
+      }});
+      return tr;
+    }}
+
+    function renderWindow() {{
+      var scrollTop = container.scrollTop;
+      var startIdx  = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - BUFFER);
+      var endIdx    = Math.min(allRows.length,
+                       Math.ceil((scrollTop + container.clientHeight) / ROW_HEIGHT) + BUFFER);
+
+      topTd.style.height    = (startIdx * ROW_HEIGHT) + 'px';
+      bottomTd.style.height = Math.max(0, (allRows.length - endIdx) * ROW_HEIGHT) + 'px';
+
+      while (tbody.children.length > 2) tbody.removeChild(tbody.children[1]);
+
+      var frag = document.createDocumentFragment();
+      for (var i = startIdx; i < endIdx; i++) frag.appendChild(makeRow(allRows[i]));
+      tbody.insertBefore(frag, bottomRow);
+    }}
 
     function updateArrows() {{
       document.querySelectorAll('table.req thead th.sortable').forEach(function(th) {{
-        var arrow = th.querySelector('.arrow');
-        arrow.textContent = parseInt(th.dataset.col) === sortCol
-          ? (sortDir === 'asc' ? ' ▲' : ' ▼')
-          : '';
+        th.querySelector('.arrow').textContent =
+          parseInt(th.dataset.col) === sortCol
+            ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
       }});
     }}
 
@@ -234,40 +300,24 @@ def render_required_long_table_html(
       sortDir = (sortCol === colIdx && sortDir === 'asc') ? 'desc' : 'asc';
       sortCol = colIdx;
 
-      var tbody = document.querySelector('table.req tbody');
-      var rows  = Array.from(tbody.querySelectorAll('tr'));
-      rows.sort(function(a, b) {{
-        var aRaw = a.cells[colIdx].textContent.trim().replace(/,/g, '');
-        var bRaw = b.cells[colIdx].textContent.trim().replace(/,/g, '');
-        var cmp;
-        if (isNum) {{
-          var an = parseFloat(aRaw), bn = parseFloat(bRaw);
-          cmp = (isNaN(an) ? -Infinity : an) - (isNaN(bn) ? -Infinity : bn);
-        }} else {{
-          cmp = aRaw.localeCompare(bRaw);
-        }}
+      allRows.sort(function(a, b) {{
+        var av = a.r[colIdx], bv = b.r[colIdx];
+        var cmp = isNum
+          ? ((av === null ? -Infinity : av) - (bv === null ? -Infinity : bv))
+          : String(av).localeCompare(String(bv));
         return sortDir === 'asc' ? cmp : -cmp;
       }});
-      rows.forEach(function(r) {{ tbody.appendChild(r); }});
+
+      container.scrollTop = 0;
+      renderWindow();
       updateArrows();
     }}
 
+    container.addEventListener('scroll', renderWindow);
     updateArrows();
+    renderWindow();
     </script>
     """
-
-    body_rows = []
-    for row in df_required_page.itertuples(index=False, name=None):
-        tds = []
-        for j, val in enumerate(row):
-            if j == 0:
-                cls = "idx"
-            elif j in RIGHT_ALIGN_COLS:
-                cls = "num"
-            else:
-                cls = ""
-            tds.append(f'<td class="{cls}">{html.escape(fmt_val(j, val))}</td>')
-        body_rows.append("<tr>" + "".join(tds) + "</tr>")
 
     st.iframe(
         f"""
@@ -276,9 +326,7 @@ def render_required_long_table_html(
           <table class="req">
             {colgroup}
             {thead}
-            <tbody>
-              {''.join(body_rows)}
-            </tbody>
+            <tbody></tbody>
           </table>
         </div>
         {js}
