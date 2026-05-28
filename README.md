@@ -241,7 +241,7 @@ The dashboard contains three sections navigable using the ◀ ▶ arrows in the 
 - Sidebar filters: project, condition, treatment, sample type, timepoints multiselect, significance level (α), and individual sample point overlay toggle
 - Custom side-by-side boxplots (responders vs non-responders) built with Plotly, using IQR whiskers and jittered point overlay
 - Statistical test selected automatically based on timepoint selection:
-  - **LMEM** (linear mixed effects model, subject as random effect) when all timepoints or multiple timepoints are selected
+  - **LMEM** (linear mixed effects model, subject as random effect) when all timepoints or multiple timepoints are selected. While LMEM has limited impact on this dataset given only three timepoints, it is the right choice at scale because it correctly models within-subject correlation across repeated measures, growing more statistically meaningful and reliable as subjects, timepoints, and projects accumulate.
   - **Mann-Whitney U** when exactly one timepoint is selected
 - Results table sorted by p-value; significant populations highlighted in a summary banner
 
