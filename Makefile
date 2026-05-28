@@ -2,16 +2,16 @@
 
 setup:
 	@echo ">>> Installing Python dependencies..."
-	pip install -r files/requirements.txt
+	pip install -r requirements.txt
 	@echo ">>> Setup complete."
 
 pipeline:
 	@echo ">>> Building database..."
-	python files/db_creation.py
+	python load_data.py
 	@echo ">>> Generating outputs..."
 	python pipeline.py
 	@echo ">>> Pipeline complete."
 
 dashboard:
 	@echo ">>> Starting Streamlit dashboard..."
-	streamlit run files/streamlit_dashboard.py --server.enableCORS false --server.enableXsrfProtection false
+	streamlit run app/streamlit_dashboard.py --server.enableCORS false --server.enableXsrfProtection false
