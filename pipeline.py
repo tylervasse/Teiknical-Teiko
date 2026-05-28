@@ -86,17 +86,29 @@ JITTER        = 0.10
 
 fig, ax = plt.subplots(figsize=(max(8, 2.2 * len(pops)), 6))
 
-for resp, color, label in [
-    ("yes", RESP_COLOR,    "Responders (yes)"),
-    ("no",  NONRESP_COLOR, "Non-responders (no)"),
-]:
+groups = []
+for resp, color in [("yes", RESP_COLOR), ("no", NONRESP_COLOR)]:
     offset    = -GROUP_OFFSET if resp == "yes" else GROUP_OFFSET
     positions = [x + offset for x in x_pos]
     data      = [
         df_p3[(df_p3["population"] == p) & (df_p3["response"] == resp)]["percentage"].dropna().tolist()
         for p in pops
     ]
+    groups.append((resp, color, positions, data))
 
+# Draw points first (low zorder) so boxes render on top
+for resp, color, positions, data in groups:
+    for i, pos in enumerate(positions):
+        vals = data[i]
+        if vals:
+            jit = (np.random.rand(len(vals)) - 0.5) * (2 * JITTER)
+            ax.scatter(
+                [pos + j for j in jit], vals,
+                color=color, alpha=0.18, s=40, zorder=2, linewidths=0,
+            )
+
+# Draw boxes on top (high zorder)
+for resp, color, positions, data in groups:
     bp = ax.boxplot(
         data,
         positions=positions,
@@ -104,23 +116,15 @@ for resp, color, label in [
         patch_artist=True,
         whis=1.5,
         showfliers=False,
-        medianprops=dict(color="black", linewidth=2),
-        whiskerprops=dict(color="black", linewidth=1.5),
-        capprops=dict(color="black", linewidth=1.5),
-        boxprops=dict(color="black", linewidth=1.5),
+        medianprops=dict(color="black", linewidth=2,  zorder=5),
+        whiskerprops=dict(color="black", linewidth=1.5, zorder=4),
+        capprops=dict(color="black",    linewidth=1.5, zorder=4),
+        boxprops=dict(color="black",    linewidth=1.5),
     )
     for patch in bp["boxes"]:
         patch.set_facecolor(color)
         patch.set_alpha(0.75)
-
-    for i, pos in enumerate(positions):
-        vals = data[i]
-        if vals:
-            jit = (np.random.rand(len(vals)) - 0.5) * (2 * JITTER)
-            ax.scatter(
-                [pos + j for j in jit], vals,
-                color=color, alpha=0.18, s=40, zorder=3, linewidths=0,
-            )
+        patch.set_zorder(3)
 
 ax.set_xticks(x_pos)
 ax.set_xticklabels(pop_labels, fontsize=12)
