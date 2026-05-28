@@ -21,11 +21,7 @@ Interactive Streamlit dashboard for analyzing immune cell population dynamics in
 
 ## Project Overview
 
-The goal of this project is to analyze immune cell population data from clinical samples and present the results through an interactive dashboard. The workflow mirrors a real-world analytical pipeline:
-
-1. Load and normalize raw CSV data into a relational SQLite database  
-2. Query and aggregate data for analysis  
-3. Visualize results through a client-facing dashboard  
+The goal of this project is to analyze immune cell population data from clinical samples and present the results through an interactive dashboard. The workflow mirrors a real-world analytical pipeline.
 
 ---
 
