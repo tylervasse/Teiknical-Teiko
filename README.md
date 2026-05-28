@@ -261,9 +261,3 @@ The dashboard contains three sections navigable using the ◀ ▶ arrows in the 
 The dashboard is publicly hosted on Streamlit Community Cloud and can be accessed at:
 
 **[https://tyler-teiknical.streamlit.app/](https://tyler-teiknical.streamlit.app/)**
-
-It can also be run locally or in GitHub Codespaces:
-
-```bash
-streamlit run app/streamlit_dashboard.py
-```
