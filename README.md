@@ -33,42 +33,15 @@ The goal of this project is to analyze immune cell population data from clinical
 
 ## How to Run the Project (GitHub Codespaces)
 
-### Automatic
-
-The project includes a `.devcontainer` that handles everything on startup.
-
 **Step 1 — Open in GitHub Codespaces**
 
 Click **Code → Codespaces → Create codespace on main** from the repository page.
 
-**Step 2 — Wait for setup to complete**
-
-The devcontainer will automatically install all Python dependencies, Java, and Nextflow. Once ready, it will launch the dashboard and prompt you to open the forwarded port.
-
-
----
-
-### Manual (Optional)
-
-If you prefer to run steps yourself or need to rebuild any outputs, the following commands are available from the terminal.
-
-**Install dependencies**
+**Step 2 — Run the following from the terminal**
 
 ```bash
 make setup
-```
-
-**Run the full data pipeline** (rebuilds the database and regenerates all output files)
-
-```bash
 make pipeline
-```
-
-Console output from `load_data.py` will report the number of projects, subjects, samples, and cell count records inserted as a sanity check.
-
-**Launch the dashboard**
-
-```bash
 make dashboard
 ```
 
@@ -194,8 +167,6 @@ The database uses a normalized relational schema that separates core entities fr
 
 ```
 Teiknical-Teiko/
-├── .devcontainer/
-│   └── devcontainer.json
 ├── files/
 │   ├── pages/
 │   │   ├── part2.py
