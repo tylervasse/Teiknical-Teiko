@@ -1,4 +1,4 @@
-# Teiknical-Teiko
+# Teiko Teiknical
 Interactive Streamlit dashboard for analyzing immune cell population dynamics in mock clinical trial data, integrating SQLite-backed queries, statistical testing, and visualization.
 
 ---
