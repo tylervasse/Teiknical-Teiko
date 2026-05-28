@@ -70,7 +70,7 @@ The project includes a `Makefile` at the repo root for automated grading and rep
 |------|----------|
 | `output/part2_frequency_summary.csv` | Relative frequency of each cell population per sample |
 | `output/part3_boxplot.png` | Boxplot comparing responders vs non-responders per population |
-| `output/part3_statistics.csv` | Mann-Whitney U p-values and group medians per population |
+| `output/part3_statistics.csv` | LMEM p-values and group medians per population |
 | `output/part4_matching_samples.csv` | All melanoma PBMC miraclib baseline samples |
 | `output/part4_samples_by_project.csv` | Sample count per project |
 | `output/part4_subjects_by_response.csv` | Subject count by response |
@@ -260,4 +260,4 @@ The dashboard contains three sections navigable using the ◀ ▶ arrows in the 
 
 The dashboard is publicly hosted on Streamlit Community Cloud and can be accessed at:
 
-**[https://tyler-teiknical.streamlit.app/](https://tyler-teiknical.streamlit.app/)**
+**[https://teiknical-tyler.streamlit.app/](https://teiknical-tyler.streamlit.app/)**
