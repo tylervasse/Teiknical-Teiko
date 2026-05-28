@@ -1,17 +1,19 @@
 """
 Generate static output tables and plots (Parts 2–4).
-Expects cell_counts.db to already exist at the repo root (built by main.nf LOAD_DATA step).
+Expects cell_counts.db to already exist at the repo root (built by load_data.py).
 All outputs are written to the output/ directory.
 """
 import math
 import os
 import sqlite3
 
+import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import pandas as pd
-from scipy.stats import mannwhitneyu
+import statsmodels.formula.api as smf
 
 ROOT    = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(ROOT, "output")
@@ -71,48 +73,94 @@ df_p3 = pd.read_sql_query("""
       AND LOWER(COALESCE(sub.response,'')) IN ('yes','no')
 """, conn)
 
-# Boxplot
-pops = [p for p in POP_ORDER if p in df_p3["population"].unique()]
-fig, axes = plt.subplots(1, len(pops), figsize=(4 * len(pops), 6), sharey=False)
-if len(pops) == 1:
-    axes = [axes]
+# Boxplot — styled to match the dashboard
+pops       = [p for p in POP_ORDER if p in df_p3["population"].unique()]
+pop_labels = [POP_LABELS.get(p, p) for p in pops]
+x_pos      = list(range(len(pops)))
 
-for ax, pop in zip(axes, pops):
-    grp    = df_p3[df_p3["population"] == pop]
-    yes_v  = grp[grp["response"] == "yes"]["percentage"].dropna().tolist()
-    no_v   = grp[grp["response"] == "no"]["percentage"].dropna().tolist()
-    bp     = ax.boxplot([yes_v, no_v], labels=["Responders\n(yes)", "Non-responders\n(no)"],
-                        patch_artist=True)
-    bp["boxes"][0].set_facecolor("#AEC6E8")
-    bp["boxes"][1].set_facecolor("#FFB3B3")
-    ax.set_title(POP_LABELS.get(pop, pop), fontsize=11, fontweight="bold")
-    if pop == pops[0]:
-        ax.set_ylabel("Relative frequency (%)", fontsize=10)
-    ax.tick_params(axis="x", labelsize=9)
+RESP_COLOR    = "#1F77B4"
+NONRESP_COLOR = "#AEC7E8"
+GROUP_OFFSET  = 0.18
+BOX_WIDTH     = 0.30
+JITTER        = 0.10
 
-fig.suptitle("Melanoma PBMC (miraclib) — Responders vs Non-responders",
-             fontsize=13, fontweight="bold", y=1.02)
+fig, ax = plt.subplots(figsize=(max(8, 2.2 * len(pops)), 6))
+
+for resp, color, label in [
+    ("yes", RESP_COLOR,    "Responders (yes)"),
+    ("no",  NONRESP_COLOR, "Non-responders (no)"),
+]:
+    offset    = -GROUP_OFFSET if resp == "yes" else GROUP_OFFSET
+    positions = [x + offset for x in x_pos]
+    data      = [
+        df_p3[(df_p3["population"] == p) & (df_p3["response"] == resp)]["percentage"].dropna().tolist()
+        for p in pops
+    ]
+
+    bp = ax.boxplot(
+        data,
+        positions=positions,
+        widths=BOX_WIDTH,
+        patch_artist=True,
+        whis=1.5,
+        showfliers=False,
+        medianprops=dict(color="black", linewidth=2),
+        whiskerprops=dict(color="black", linewidth=1.5),
+        capprops=dict(color="black", linewidth=1.5),
+        boxprops=dict(color="black", linewidth=1.5),
+    )
+    for patch in bp["boxes"]:
+        patch.set_facecolor(color)
+        patch.set_alpha(0.75)
+
+    for i, pos in enumerate(positions):
+        vals = data[i]
+        if vals:
+            jit = (np.random.rand(len(vals)) - 0.5) * (2 * JITTER)
+            ax.scatter(
+                [pos + j for j in jit], vals,
+                color=color, alpha=0.18, s=40, zorder=3, linewidths=0,
+            )
+
+ax.set_xticks(x_pos)
+ax.set_xticklabels(pop_labels, fontsize=12)
+ax.set_ylabel("Relative frequency (%)", fontsize=13)
+ax.set_title("Responders (yes) vs Non-responders (no)", fontsize=14, fontweight="bold", pad=12)
+
+legend_handles = [
+    mpatches.Patch(facecolor=RESP_COLOR,    alpha=0.75, edgecolor="black", label="Responders (yes)"),
+    mpatches.Patch(facecolor=NONRESP_COLOR, alpha=0.75, edgecolor="black", label="Non-responders (no)"),
+]
+ax.legend(handles=legend_handles, fontsize=11)
+
 plt.tight_layout()
 plt.savefig(os.path.join(OUT_DIR, "part3_boxplot.png"), dpi=150, bbox_inches="tight")
 plt.close()
 
-# Significance table (Mann-Whitney U, single-timepoint default)
+# Significance table (LMEM, subject as random effect — all timepoints)
 stats_rows = []
 for pop in pops:
-    grp   = df_p3[df_p3["population"] == pop]
-    yes_v = grp[grp["response"] == "yes"]["percentage"].dropna()
-    no_v  = grp[grp["response"] == "no"]["percentage"].dropna()
-    pval  = float("nan")
-    if len(yes_v) >= 2 and len(no_v) >= 2:
-        pval = float(mannwhitneyu(yes_v, no_v, alternative="two-sided").pvalue)
+    grp  = df_p3[df_p3["population"] == pop].copy()
+    yv   = grp[grp["response"] == "yes"]["percentage"].dropna()
+    nv   = grp[grp["response"] == "no"]["percentage"].dropna()
+    pval = float("nan")
+    grp["response_bin"] = grp["response"].map({"yes": 1, "no": 0})
+    if grp["response_bin"].nunique() == 2 and grp["subject"].nunique() > 1:
+        try:
+            fit  = smf.mixedlm("percentage ~ response_bin", grp, groups=grp["subject"]).fit(disp=False)
+            p_raw = fit.pvalues.get("response_bin", None)
+            if p_raw is not None:
+                pval = float(p_raw)
+        except Exception:
+            pass
     stats_rows.append({
-        "population":           POP_LABELS.get(pop, pop),
-        "n_responders":         int(len(yes_v)),
-        "n_non_responders":     int(len(no_v)),
-        "median_responders":    round(float(yes_v.median()), 4) if len(yes_v) else None,
-        "median_non_responders":round(float(no_v.median()), 4)  if len(no_v)  else None,
-        "p_value":              round(pval, 4) if not math.isnan(pval) else None,
-        "significant_p0.05":   (not math.isnan(pval) and pval < 0.05),
+        "population":            POP_LABELS.get(pop, pop),
+        "n_responders":          int(len(yv)),
+        "n_non_responders":      int(len(nv)),
+        "median_responders":     round(float(yv.median()), 4) if len(yv) else None,
+        "median_non_responders": round(float(nv.median()), 4) if len(nv) else None,
+        "p_value":               round(pval, 4) if not math.isnan(pval) else None,
+        "significant_p0.05":     (not math.isnan(pval) and pval < 0.05),
     })
 
 df_stats = pd.DataFrame(stats_rows).sort_values("p_value", na_position="last")
