@@ -83,10 +83,9 @@ def render_part3():
         )
 
         times_available = sorted([int(x) for x in opts.get("times", []) if x is not None])
-        time_filter = st.multiselect(
-            "Timepoints (empty = all)",
-            options=times_available,
-            default=[],
+        time_filter = st.selectbox(
+            "Timepoint",
+            options=["(All)"] + times_available,
             key="p3_timepoints",
         )
 
@@ -102,7 +101,7 @@ def render_part3():
             key="p3_alpha",
         )
 
-    time_arg = tuple(int(t) for t in time_filter) if time_filter else None
+    time_arg = None if time_filter == "(All)" else (int(time_filter),)
 
     with st.spinner("Querying database for Part 3..."):
         df3 = query_part3_frequencies(
@@ -283,8 +282,8 @@ def render_part3():
     # ------- Significance testing -------
     st.subheader("Significance testing by population")
 
-    # Determine test: LMEM for 0 or multiple timepoints, Mann-Whitney U for exactly 1
-    use_lmem = len(time_filter) != 1
+    # Determine test: LMEM for all timepoints, Mann-Whitney U for a single timepoint
+    use_lmem = time_filter == "(All)"
 
     try:
         from scipy.stats import mannwhitneyu
