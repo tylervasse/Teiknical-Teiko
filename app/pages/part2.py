@@ -1,29 +1,18 @@
-import math
 import re
 
 import pandas as pd
 import streamlit as st
 
-from components import clamp_page, init_state, render_pager
-from constants import DB_PATH, PAGER_PULL_UP_PX, POP_ORDER
+from constants import DB_PATH, POP_ORDER
 from db import load_filter_options, norm, query_part2_frequencies
-from tables import (
-    make_required_df,
-    render_required_long_table_html,
-)
+from tables import make_required_df, render_required_long_table_html
 
 
 def _expand_range(range_str: str, all_samples: list) -> list:
-    """
-    Parse a 'start-end' string and return matching sample names from all_samples.
-    Works for purely numeric names ('1-50') and prefixed names ('s001-s050').
-    The prefix of both endpoints must match.
-    """
     text = range_str.strip()
     if not text:
         return []
 
-    # Walk right-to-left to find a dash where both sides contain at least one digit
     split_idx = None
     for i in range(len(text) - 1, 0, -1):
         if text[i] == "-":
@@ -38,7 +27,6 @@ def _expand_range(range_str: str, all_samples: list) -> list:
     start_str = text[:split_idx].strip()
     end_str = text[split_idx + 1 :].strip()
 
-    # Extract leading non-digit prefix and trailing integer
     m_s = re.match(r"^(.*?)(\d+)$", start_str)
     m_e = re.match(r"^(.*?)(\d+)$", end_str)
     if not m_s or not m_e:
@@ -81,7 +69,6 @@ def render_part2():
         st.error(f"Could not load DB options from {DB_PATH}. Did you run Part 1 to create/load the DB?\n\nError: {e}")
         st.stop()
 
-    # --- Static sidebar filters (rendered before the query) ---
     with st.sidebar:
         st.sidebar.header("Filters (Part 2)")
         project = st.sidebar.selectbox("Project", ["(All)"] + opts["projects"], key="p2_project")
@@ -90,7 +77,6 @@ def render_part2():
         treatment = st.sidebar.selectbox("Treatment", ["(All)"] + opts["treatments"], key="p2_treatment")
         sample_type = st.sidebar.selectbox("Sample Type", ["(All)"] + opts["sample_types"], key="p2_sample_type")
 
-    # --- Query (needed to populate sample search options) ---
     with st.spinner("Querying database..."):
         df = query_part2_frequencies(
             DB_PATH,
@@ -103,13 +89,11 @@ def render_part2():
 
     all_sample_options = sorted(df["sample"].unique().tolist()) if not df.empty else []
 
-    # Sanitize stale multiselect values that no longer exist in current options
     current_filter = st.session_state.get("p2_sample_filter", [])
     valid_filter = [s for s in current_filter if s in all_sample_options]
     if valid_filter != current_filter:
         st.session_state["p2_sample_filter"] = valid_filter
 
-    # --- Dynamic sidebar: sample search + remaining controls ---
     with st.sidebar:
         st.sidebar.subheader("Sample Search")
         selected_samples = st.sidebar.multiselect(
@@ -129,13 +113,6 @@ def render_part2():
             use_container_width=True,
         )
 
-        st.sidebar.divider()
-        st.sidebar.selectbox("Samples per page", [10, 25, 50, 100], index=1, key="p2_page_size_samples")
-
-        page_size_samples = int(st.session_state.p2_page_size_samples)
-        page_size_rows_required = page_size_samples
-
-    # --- Apply sample filter ---
     range_str = st.session_state.get("p2_sample_range", "").strip()
     range_matches = _expand_range(range_str, all_sample_options) if range_str else []
     combined_filter = list(set(selected_samples) | set(range_matches))
@@ -154,31 +131,10 @@ def render_part2():
 
     st.divider()
 
-    # ------- Required table -------
     df_required = make_required_df(df)
+    df_sorted = df_required.sort_values("sample", ascending=True, kind="stable")
 
-    required_page_key = "part2_required"
-    init_state(required_page_key)
-
-    sort_key = "sample"
-    sort_dir = "asc"
-    ascending = True
-
-    df_sorted = df_required.copy()
-    if sort_key in {"idx", "total_count", "count", "percentage"}:
-        df_sorted[sort_key] = pd.to_numeric(df_sorted[sort_key], errors="coerce")
-    df_sorted = df_sorted.sort_values(sort_key, ascending=ascending, kind="stable")
-
-    total_pages = max(1, math.ceil(len(df_sorted) / page_size_rows_required))
-    current_page = clamp_page(int(st.session_state[f"{required_page_key}_page"]), total_pages)
-    st.session_state[f"{required_page_key}_page"] = current_page
-
-    start = (current_page - 1) * page_size_rows_required
-    end = start + page_size_rows_required
-    df_required_page = df_sorted.iloc[start:end].copy()
-
-    render_required_long_table_html(df_required_page, height_px=560, sort_key=sort_key, sort_dir=sort_dir)
-    render_pager(total_pages, page_key=required_page_key, pull_up_px=PAGER_PULL_UP_PX)
+    render_required_long_table_html(df_sorted, height_px=600, sort_key="sample", sort_dir="asc")
 
     csv_required = df_required.drop(columns=["idx"]).to_csv(index=False).encode("utf-8")
     st.download_button(
@@ -188,23 +144,14 @@ def render_part2():
         mime="text/csv",
     )
 
-    st.caption(
-        f"Sorted by **{sort_key}** ({sort_dir}). "
-        f"Showing rows {start+1}-{min(end, len(df_sorted))} of {len(df_sorted)}."
-    )
-
     st.divider()
 
-    # ------- Plot -------
     st.subheader("Population composition by sample (% stacked)")
-
-    max_samples = int(st.session_state.p2_page_size_samples)
 
     keep_samples = (
         df[["sample"]]
         .drop_duplicates()
-        .sort_values("sample")
-        .head(max_samples)["sample"]
+        .sort_values("sample")["sample"]
         .tolist()
     )
 
