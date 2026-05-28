@@ -1,13 +1,11 @@
 """
-Full pipeline: build database (Part 1) + generate static output tables and
-plots (Parts 2–4).  All outputs are written to the output/ directory.
-
-Usage:
-    python pipeline.py
+Generate static output tables and plots (Parts 2–4).
+Expects cell_counts.db to already exist at the repo root (built by main.nf LOAD_DATA step).
+All outputs are written to the output/ directory.
 """
 import math
 import os
-import sys
+import sqlite3
 
 import matplotlib
 matplotlib.use("Agg")
@@ -18,9 +16,6 @@ from scipy.stats import mannwhitneyu
 ROOT    = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.join(ROOT, "output")
 os.makedirs(OUT_DIR, exist_ok=True)
-
-sys.path.insert(0, os.path.join(ROOT, "files"))
-import db_creation
 
 DB_PATH = os.path.join(ROOT, "cell_counts.db")
 
@@ -33,15 +28,6 @@ POP_LABELS = {
     "monocyte":    "Monocytes",
 }
 
-
-# ── Part 1: build database ────────────────────────────────────────────────────
-print("Part 1: Building database...")
-db_creation.DATA_PATH = os.path.join(ROOT, "files", "cell-count.csv")
-db_creation.DB_PATH   = DB_PATH
-db_creation.main()
-print("Part 1: Done.\n")
-
-import sqlite3
 conn = sqlite3.connect(DB_PATH)
 
 
