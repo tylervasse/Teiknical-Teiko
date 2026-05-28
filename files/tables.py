@@ -269,7 +269,7 @@ def render_required_long_table_html(
             tds.append(f'<td class="{cls}">{html.escape(fmt_val(j, val))}</td>')
         body_rows.append("<tr>" + "".join(tds) + "</tr>")
 
-    st.components.v1.html(
+    st.iframe(
         f"""
         {css}
         <div class="req-wrap">
@@ -284,7 +284,6 @@ def render_required_long_table_html(
         {js}
         """,
         height=height_px + 20,
-        scrolling=False,
     )
 
 
@@ -441,7 +440,7 @@ def render_html_table(df: pd.DataFrame, max_height_px: int = 500, gray_first_col
     </script>
     """
 
-    st.components.v1.html(
+    st.iframe(
         f"""
         {css}
         <div class="gen-wrap">
@@ -454,7 +453,6 @@ def render_html_table(df: pd.DataFrame, max_height_px: int = 500, gray_first_col
         {js}
         """,
         height=height_px + 20,
-        scrolling=False,
     )
 
 
@@ -667,7 +665,7 @@ def render_pretty_rows(df_long: pd.DataFrame, height_px: int = 560):
         row.append("</tr>")
         body_rows.append("".join(row))
 
-    st.components.v1.html(
+    st.iframe(
         f"""
         {css}
         <div class="wrap">
@@ -680,5 +678,4 @@ def render_pretty_rows(df_long: pd.DataFrame, height_px: int = 560):
         </div>
         """,
         height=height_px,
-        scrolling=False,
     )
