@@ -29,11 +29,11 @@ The goal of this project is to analyze immune cell population data from clinical
 
 ## How to Run the Project (GitHub Codespaces)
 
-**Step 1 — Open in GitHub Codespaces**
+**Step 1 - Open in GitHub Codespaces**
 
 Click **Code → Codespaces → Create codespace on main** from the repository page.
 
-**Step 2 — Run the following from the terminal**
+**Step 2 - Run the following from the terminal**
 
 ```bash
 make setup
@@ -59,8 +59,8 @@ The project includes a `Makefile` at the repo root for automated grading and rep
 
 `make pipeline` runs two steps sequentially:
 
-1. **`load_data.py`** — initializes the SQLite schema and loads `cell-count.csv` into the database (Part 1)
-2. **`pipeline.py`** — produces static output files for Parts 2–4 in the `output/` directory:
+1. **`load_data.py`** - initializes the SQLite schema and loads `cell-count.csv` into the database (Part 1)
+2. **`pipeline.py`** - produces static output files for Parts 2–4 in the `output/` directory:
 
 | File | Contents |
 |------|----------|
@@ -191,7 +191,7 @@ Teiknical-Teiko/
 
 | File | Description |
 |------|-------------|
-| `load_data.py` | Entry point for Part 1 — initializes the SQLite schema and loads `cell-count.csv` into the database |
+| `load_data.py` | Entry point for Part 1 - initializes the SQLite schema and loads `cell-count.csv` into the database |
 | `pipeline.py` | Generates all static output files for Parts 2–4 (frequency CSV, boxplot PNG, statistics CSV, subset CSVs) |
 | `cell-count.csv` | Raw input data containing cell counts and sample metadata |
 | `Makefile` | Defines the three graded targets: `setup`, `pipeline`, and `dashboard` |
@@ -201,19 +201,19 @@ Teiknical-Teiko/
 
 | File | Description |
 |------|-------------|
-| `streamlit_dashboard.py` | Main entry point — defines section list, handles sidebar navigation, and injects global CSS |
+| `streamlit_dashboard.py` | Main entry point - defines section list, handles sidebar navigation, and injects global CSS |
 | `db_creation.py` | Defines the SQLite schema, validates the CSV, and loads normalized data into the database; maps `"none"` treatment to `NULL` |
-| `db.py` | All database access logic — cached connection via `@st.cache_resource`, cached query results via `@st.cache_data`, with flexible filtering by project, condition, treatment, sample type, and timepoint |
+| `db.py` | All database access logic - cached connection via `@st.cache_resource`, cached query results via `@st.cache_data`, with flexible filtering by project, condition, treatment, sample type, and timepoint |
 | `tables.py` | HTML table renderers using `st.iframe` for the sortable red-header tables used across all three pages |
 | `components.py` | Pagination widget (prev/next buttons, page input, total pages) used by the Part 2 overview table |
-| `constants.py` | Shared constants — column definitions, population order and labels, layout widths, and the database path |
-| `pages/part2.py` | Overview page — frequency table with sidebar filters, pagination, stacked bar chart, and CSV export |
-| `pages/part3.py` | Response comparison page — Plotly boxplots and LMEM / Mann-Whitney U significance testing |
-| `pages/part4.py` | Subset analysis page — filtered sample table, summary breakdowns, and average B cell count |
+| `constants.py` | Shared constants - column definitions, population order and labels, layout widths, and the database path |
+| `pages/part2.py` | Overview page - frequency table with sidebar filters, pagination, stacked bar chart, and CSV export |
+| `pages/part3.py` | Response comparison page - Plotly boxplots and LMEM / Mann-Whitney U significance testing |
+| `pages/part4.py` | Subset analysis page - filtered sample table, summary breakdowns, and average B cell count |
 
 ### Design Rationale
 
-The `app/` directory separates the dashboard logic from the pipeline scripts at the root, keeping the two concerns independent — `load_data.py` and `pipeline.py` can be run headlessly by the grader without touching any Streamlit code. Within `app/`, database access is isolated in `db.py` so that all caching, connection management, and query logic lives in one place and pages never open their own connections. Each page is a single render function in its own file, which makes the sections independently readable and testable. Shared state (constants, table renderers, pagination) is extracted into `constants.py`, `tables.py`, and `components.py` to avoid duplication across the three pages.
+The `app/` directory separates the dashboard logic from the pipeline scripts at the root, keeping the two concerns independent - `load_data.py` and `pipeline.py` can be run headlessly by the grader without touching any Streamlit code. Within `app/`, database access is isolated in `db.py` so that all caching, connection management, and query logic lives in one place and pages never open their own connections. Each page is a single render function in its own file, which makes the sections independently readable and testable. Shared state (constants, table renderers, pagination) is extracted into `constants.py`, `tables.py`, and `components.py` to avoid duplication across the three pages.
 
 ---
 
