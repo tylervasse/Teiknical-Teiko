@@ -205,11 +205,11 @@ Teiknical-Teiko/
 | `db_creation.py` | Defines the SQLite schema, validates the CSV, and loads normalized data into the database; maps `"none"` treatment to `NULL` |
 | `db.py` | All database access logic - cached connection via `@st.cache_resource`, cached query results via `@st.cache_data`, with flexible filtering by project, condition, treatment, sample type, and timepoint |
 | `tables.py` | HTML table renderers using `st.iframe` for the sortable red-header tables used across all three pages |
-| `components.py` | Pagination widget (prev/next buttons, page input, total pages) used by the Part 2 overview table |
-| `constants.py` | Shared constants - column definitions, population order and labels, layout widths, and the database path |
-| `pages/part2.py` | Overview page - frequency table with sidebar filters, pagination, stacked bar chart, and CSV export |
-| `pages/part3.py` | Response comparison page - Plotly boxplots and LMEM / Mann-Whitney U significance testing |
-| `pages/part4.py` | Subset analysis page - filtered sample table, summary breakdowns, and average B cell count |
+| `components.py` | Pagination utility (prev/next buttons, page input) available for paginated views |
+| `constants.py` | Shared constants — column definitions, population order and labels, layout widths, and the database path |
+| `pages/part2.py` | Overview page — frequency table with sidebar filters, stacked bar chart, and CSV export |
+| `pages/part3.py` | Response comparison page — Plotly boxplots and LMEM / Mann-Whitney U significance testing |
+| `pages/part4.py` | Subset analysis page — filtered sample table, summary breakdowns, and average B cell count |
 
 ### Design Rationale
 
@@ -225,7 +225,7 @@ The dashboard contains three sections navigable using the ◀ ▶ arrows in the 
 
 ### Overview (Part 2)
 
-- Interactive frequency table showing relative frequency (%) of each cell population per sample, with sortable columns, full-precision percentages, and paginated output
+- Interactive frequency table showing relative frequency (%) of each cell population per sample, with sortable columns, full-precision percentages, and a scrollable view
 - Sidebar filters for project, condition, response, treatment, sample type, and sample name search with range input (e.g. `s001-s050`)
 - CSV export of the filtered view
 
