@@ -14,4 +14,4 @@ pipeline:
 
 dashboard:
 	@echo ">>> Starting Streamlit dashboard..."
-	streamlit run app/streamlit_dashboard.py --server.enableCORS false --server.enableXsrfProtection false
+	python -m streamlit run app/streamlit_dashboard.py --server.enableCORS false --server.enableXsrfProtection false
