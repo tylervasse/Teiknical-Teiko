@@ -205,15 +205,14 @@ Teiknical-Teiko/
 | `db_creation.py` | Defines the SQLite schema, validates the CSV, and loads normalized data into the database; maps `"none"` treatment to `NULL` |
 | `db.py` | All database access logic - cached connection via `@st.cache_resource`, cached query results via `@st.cache_data`, with flexible filtering by project, condition, treatment, sample type, and timepoint |
 | `tables.py` | HTML table renderers using `st.iframe` for the sortable red-header tables used across all three pages |
-| `components.py` | Pagination utility (prev/next buttons, page input) available for paginated views |
-| `constants.py` | Shared constants — column definitions, population order and labels, layout widths, and the database path |
-| `pages/part2.py` | Overview page — frequency table with sidebar filters, stacked bar chart, and CSV export |
-| `pages/part3.py` | Response comparison page — Plotly boxplots and LMEM / Mann-Whitney U significance testing |
-| `pages/part4.py` | Subset analysis page — filtered sample table, summary breakdowns, and average B cell count |
+| `constants.py` | Shared constants - column definitions, population order and labels, and the database path |
+| `pages/part2.py` | Overview page - frequency table with sidebar filters, stacked bar chart, and CSV export |
+| `pages/part3.py` | Response comparison page - Plotly boxplots and LMEM / Mann-Whitney U significance testing |
+| `pages/part4.py` | Subset analysis page - filtered sample table, summary breakdowns, and average B cell count |
 
 ### Design Rationale
 
-The `app/` directory separates the dashboard logic from the pipeline scripts at the root, keeping the two concerns independent - `load_data.py` and `pipeline.py` can be run headlessly by the grader without touching any Streamlit code. Within `app/`, database access is isolated in `db.py` so that all caching, connection management, and query logic lives in one place and pages never open their own connections. Each page is a single render function in its own file, which makes the sections independently readable and testable. Shared state (constants, table renderers, pagination) is extracted into `constants.py`, `tables.py`, and `components.py` to avoid duplication across the three pages.
+The `app/` directory separates the dashboard logic from the pipeline scripts at the root, keeping the two concerns independent - `load_data.py` and `pipeline.py` can be run headlessly by the grader without touching any Streamlit code. Within `app/`, database access is isolated in `db.py` so that all caching, connection management, and query logic lives in one place and pages never open their own connections. Each page is a single render function in its own file, which makes the sections independently readable and testable. Shared state (constants and table renderers) is extracted into `constants.py` and `tables.py` to avoid duplication across the three pages.
 
 ---
 

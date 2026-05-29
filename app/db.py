@@ -3,9 +3,6 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
-from constants import DB_PATH
-
-
 @st.cache_resource
 def get_conn(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
